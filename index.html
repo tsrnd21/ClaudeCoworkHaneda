@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>構造解析レポート — 羽田空港アクセス鉄道</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Meiryo', 'Noto Sans JP', 'Hiragino Kaku Gothic Pro', sans-serif; background: #f0f2f5; color: #1a1a2e; font-size: 13px; line-height: 1.6; }
+    .report-header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%); color: white; padding: 36px 48px 28px; }
+    .report-header .label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #7ecef4; margin-bottom: 8px; }
+    .report-header h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .report-header .sub { font-size: 13px; color: rgba(255,255,255,0.75); margin-bottom: 22px; }
+    .header-meta { display: flex; gap: 32px; flex-wrap: wrap; }
+    .header-meta .meta-item { display: flex; flex-direction: column; gap: 3px; }
+    .header-meta .meta-key { font-size: 10px; color: #7ecef4; letter-spacing: 1px; text-transform: uppercase; }
+    .header-meta .meta-val { font-size: 13px; font-weight: 500; }
+    .nav-link { display: inline-block; margin-top: 18px; font-size: 12px; color: #7ecef4; text-decoration: none; }
+    .nav-link:hover { color: #fff; }
+    .stat-bar { background: #fff; border-bottom: 1px solid #e0e4ea; display: flex; }
+    .stat-item { flex: 1; padding: 16px 20px; border-right: 1px solid #e8eaf0; text-align: center; }
+    .stat-item:last-child { border-right: none; }
+    .stat-item .stat-num { font-size: 26px; font-weight: 700; color: #0f3460; }
+    .stat-item .stat-label { font-size: 11px; color: #888; margin-top: 3px; }
+    .body-wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px; display: flex; flex-direction: column; gap: 22px; }
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); overflow: hidden; }
+    .card-head { padding: 14px 24px; border-bottom: 1px solid #f0f2f5; display: flex; align-items: center; gap: 10px; background: #fafbfc; }
+    .card-head .sec-num { background: #0f3460; color: white; border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+    .card-head h2 { font-size: 14px; font-weight: 700; color: #1a1a2e; }
+    .card-head .badge { margin-left: auto; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; }
+    .badge-amber  { background: #fef3c7; color: #d97706; }
+    .badge-green  { background: #dcfce7; color: #16a34a; }
+    .badge-purple { background: #ede9fe; color: #7c3aed; }
+    .badge-red    { background: #fee2e2; color: #dc2626; }
+    .card-body { padding: 20px 24px; }
+    .feature-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+    .feature-tag { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1.5px solid; }
+    .feature-tag.active  { background: #0f3460; color: #fff; border-color: #0f3460; }
+    .feature-tag.inactive{ background: #f5f5f5; color: #aaa; border-color: #ddd; }
+    .feature-tag .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .feature-tag.active  .dot { background: #7ecef4; }
+    .feature-tag.inactive .dot { background: #ccc; }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .legend-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid; }
+    .tag-h01   { background: #1a3a5c; color: #fff; border-color: #1a3a5c; }
+    .tag-h02   { background: #2e7d9b; color: #fff; border-color: #2e7d9b; }
+    .tag-h03   { background: #4caf8a; color: #fff; border-color: #4caf8a; }
+    .tag-h04   { background: #8bc34a; color: #333; border-color: #8bc34a; }
+    .tag-spec  { background: #fff3e0; color: #e65100; border-color: #ffcc80; }
+    .tag-header{ background: #f3e5f5; color: #6a1b9a; border-color: #ce93d8; }
+    .tag-zone  { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
+    .tag-blank { background: #f5f5f5; color: #9e9e9e; border-color: #e0e0e0; }
+    .tree-container { background: #1e2d3d; border-radius: 10px; padding: 20px 24px; font-family: 'Consolas','Courier New',monospace; font-size: 12px; margin-bottom: 18px; }
+    .tree-title { font-family: 'Meiryo',sans-serif; font-size: 12px; font-weight: 700; color: #7eb8d4; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
+    .t-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+    .t-indent { color: #4a6278; }
+    .t-level { display: inline-block; width: 38px; text-align: center; padding: 1px 0; border-radius: 3px; font-size: 10px; font-weight: 700; color: white; flex-shrink: 0; }
+    .lv-h01  { background: #1a3a5c; }
+    .lv-h02  { background: #2e7d9b; }
+    .lv-h03  { background: #4caf8a; }
+    .lv-h04  { background: #8bc34a; color: #333; }
+    .lv-spec { background: #e65100; }
+    .lv-zone { background: #1565c0; }
+    .t-name  { color: #a8c7a0; }
+    .t-note  { color: #607d8b; font-size: 11px; margin-left: 6px; font-family: 'Meiryo',sans-serif; }
+    .t-cost  { color: #f0c060; font-size: 11px; margin-left: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 700; color: #888; border-bottom: 2px solid #f0f2f5; background: #fafbfc; }
+    td { padding: 9px 12px; border-bottom: 1px solid #f5f7fa; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+    code { background: #f0f3f7; color: #0f3460; padding: 1px 5px; border-radius: 3px; font-family: 'Consolas',monospace; font-size: 11px; }
+    .check-ok { color: #16a34a; font-weight: 700; }
+    .check-no { color: #aaa; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+    .chart-wrap     { position: relative; height: 240px; }
+    .chart-wrap-bar { position: relative; height: 280px; }
+    .zone-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .zone-table th { background: #0f3460; color: white; padding: 9px 14px; font-size: 11px; font-weight: 700; text-align: left; }
+    .zone-table td { padding: 10px 14px; border-bottom: 1px solid #e8eaf0; }
+    .zone-table tr:last-child td { border-bottom: none; }
+    .zone-bar-bg   { background: #e8eaf0; border-radius: 4px; height: 8px; }
+    .zone-bar-fill { height: 8px; border-radius: 4px; }
+    .zone-1-color  { background: #0f3460; }
+    .zone-2-color  { background: #2e7d9b; }
+    .type-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-top: 16px; }
+    .type-card { background: #f8fafc; border-radius: 8px; padding: 14px 16px; border-left: 4px solid; }
+    .type-card .tc-label { font-size: 10px; color: #888; margin-bottom: 4px; }
+    .type-card .tc-num   { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+    .type-card .tc-pct   { font-size: 11px; color: #aaa; }
+    .pattern-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .pattern-card { border: 1px solid #e8eaf0; border-radius: 8px; overflow: hidden; }
+    .pattern-card .p-head { background: #f0f3f8; padding: 10px 14px; font-size: 12px; font-weight: 700; color: #0f3460; border-bottom: 1px solid #e8eaf0; display: flex; align-items: center; gap: 8px; }
+    .pattern-card .p-body { padding: 12px 14px; font-size: 12px; color: #444; line-height: 1.7; }
+    .pattern-tag { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: #dbeafe; color: #1e40af; }
+    .notice-list { display: flex; flex-direction: column; gap: 10px; }
+    .notice-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 7px; background: #f7f8fa; border-left: 3px solid #ccc; }
+    .notice-item.warn { border-left-color: #f0a500; background: #fffbf0; }
+    .notice-item.info { border-left-color: #4a90d9; background: #f0f6ff; }
+    .notice-item.ok   { border-left-color: #5cb85c; background: #f4fbf4; }
+    .notice-icon { font-size: 16px; flex-shrink: 0; }
+    .notice-text { font-size: 12px; line-height: 1.6; color: #333; }
+    .notice-text strong { color: #1a1a2e; display: block; margin-bottom: 3px; }
+    .evidence-box { background: #f8fafc; border: 1px solid #e0e6ee; border-radius: 6px; padding: 10px 14px; font-size: 11px; color: #555; line-height: 1.7; }
+    .evidence-box .ev-label { font-size: 10px; font-weight: 700; color: #0f3460; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+    .verdict-banner { background: linear-gradient(90deg,#0f3460,#2e7d9b); color: white; border-radius: 8px; padding: 16px 24px; display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+    .verdict-icon { font-size: 28px; }
+    .verdict-text .vt-type { font-size: 18px; font-weight: 700; }
+    .verdict-text .vt-desc { font-size: 12px; color: rgba(255,255,255,0.8); margin-top: 3px; }
+    .footer { text-align: center; font-size: 11px; color: #bbb; padding: 24px; }
+  </style>
+</head>
+<body>
+
+<div class="report-header">
+  <div class="label">Structure Analysis Report &nbsp;|&nbsp; 日本語版</div>
+  <h1>構造解析レポート — 羽田空港アクセス鉄道</h1>
+  <div class="sub">令和6年度 東京国際空港 空港アクセス鉄道 駅舎改築部他 躯体築造工事</div>
+  <div class="header-meta">
+    <div class="meta-item"><span class="meta-key">ファイル</span><span class="meta-val">하네다_공항철도-22884765.xlsx</span></div>
+    <div class="meta-item"><span class="meta-key">対象シート</span><span class="meta-val">内訳書</span></div>
+    <div class="meta-item"><span class="meta-key">構造タイプ</span><span class="meta-val">TWO_ROW_ITEM + COLUMN_HIERARCHY</span></div>
+    <div class="meta-item"><span class="meta-key">分析日</span><span class="meta-val">2026-04-06</span></div>
+    <div class="meta-item"><span class="meta-key">分析バージョン</span><span class="meta-val">Stage 1 · ML Loop v2</span></div>
+  </div>
+  <a class="nav-link" href="flatten_diagram_haneda.html">← フラット化ダイアグラムへ</a>
+</div>
+
+<div class="stat-bar">
+  <div class="stat-item"><div class="stat-num">¥175.1億</div><div class="stat-label">工事価格</div></div>
+  <div class="stat-item"><div class="stat-num">4,620</div><div class="stat-label">総行数</div></div>
+  <div class="stat-item"><div class="stat-num">H04</div><div class="stat-label">最大階層深度</div></div>
+  <div class="stat-item"><div class="stat-num">2</div><div class="stat-label">Zone区分数</div></div>
+  <div class="stat-item"><div class="stat-num">4</div><div class="stat-label">検出 Feature 数</div></div>
+  <div class="stat-item"><div class="stat-num">確定</div><div class="stat-label">構造タイプ判定</div></div>
+</div>
+
+<div class="body-wrap">
+
+  <!-- ① Structure Feature 判定 -->
+  <div class="card">
+    <div class="card-head">
+      <div class="sec-num">①</div>
+      <h2>Structure Feature 判定</h2>
+      <span class="badge badge-blue">4 / 7 DETECTED</span>
+    </div>
+    <div class="card-body">
+      <div class="verdict-banner">
+        <div class="verdict-icon">🏗️</div>
+        <div class="verdict-text">
+          <div class="vt-type">TYPE_COLUMN_HIERARCHY + TWO_ROW_ITEM</div>
+          <div class="vt-desc">列位置（A〜D列）で階層を判定 ／ 品名行＋規格行の2行ペア構造を持つ日本式公共工事内訳書</div>
+        </div>
+      </div>
+      <div class="feature-tags">
+        <span class="feature-tag inactive"><span class="dot"></span>Code_Hierarchy &nbsp;<small>なし</small></span>
+        <span class="feature-tag active"><span class="dot"></span>Column_Hierarchy ✓</span>
+        <span class="feature-tag active"><span class="dot"></span>Two_Row_Item ✓</span>
+        <span class="feature-tag inactive"><span class="dot"></span>Section_Repeated &nbsp;<small>なし</small></span>
+        <span class="feature-tag active"><span class="dot"></span>Repeated_Header ✓</span>
+        <span class="feature-tag active"><span class="dot"></span>Zone_Block ✓</span>
+        <span class="feature-tag inactive"><span class="dot"></span>Overview_Row &nbsp;<small>なし</small></span>
+      </div>
+      <table>
+        <thead><tr><th>Feature</th><th>判定</th><th>Evidence（根拠）</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Code_Hierarchy</strong></td><td><span class="check-no">✗ 不検出</span></td><td>コード体系なし。A〜D列の位置のみで階層を表現。コード列に相当する列が存在しない。</td></tr>
+          <tr><td><strong>Column_Hierarchy</strong></td><td><span class="check-ok">✓ 検出</span></td><td>A列＝H01費目、B列＝H02工種、C列＝H03種別、D列＝H04細別。各行はいずれか1列のみに値を持ち残列は空白。列位置で階層レベルを一意に判定できる。</td></tr>
+          <tr><td><strong>Two_Row_Item</strong></td><td><span class="check-ok">✓ 検出</span></td><td>H04 Leaf は必ず2行ペア。奇数行：品名・単位（数量・金額なし）、偶数行：規格テキスト・数量・単価・金額。例）R11「鉄筋(1) / ｔ」→ R12「SD345･D13 一般構造物 / 数量1.6 / 金額310,240」</td></tr>
+          <tr><td><strong>Section_Repeated</strong></td><td><span class="check-no">✗ 不検出</span></td><td>工種セクションの繰り返し構造なし。Zone単位で線形に記述されている。</td></tr>
+          <tr><td><strong>Repeated_Header</strong></td><td><span class="check-ok">✓ 検出</span></td><td>「費目・工種・種別・細別・規格 / 単位 / 数量 / 単価 / 金額」のヘッダー行が各ページ先頭に反復出現（R4, R37, R70…）。フラット化時に <code>PAGE_HEADER</code> として除外が必要。</td></tr>
+          <tr><td><strong>Zone_Block</strong></td><td><span class="check-ok">✓ 検出</span></td><td>A列に「立坑部」（R1）・「駅舎改築部」（R628）がゾーン区切りとして出現。Zone情報は <code>zone_label</code> として全後続行に伝搬。</td></tr>
+          <tr><td><strong>Overview_Row</strong></td><td><span class="check-no">✗ 不検出</span></td><td>サマリー概要行なし。H01〜H03の集計行が集計機能を担う。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ② 階層構造分析 -->
+  <div class="card">
+    <div class="card-head">
+      <div class="sec-num">②</div>
+      <h2>階層構造分析 — Column_Hierarchy（4レベル）</h2>
+      <span class="badge badge-green">H01 → H02 → H03 → H04 + SPEC</span>
+    </div>
+    <div class="card-body">
+      <div class="legend-row">
+        <span class="legend-tag tag-h01">H01 費目</span>
+        <span class="legend-tag tag-h02">H02 工種</span>
+        <span class="legend-tag tag-h03">H03 種別</span>
+        <span class="legend-tag tag-h04">H04 細別（品名）</span>
+        <span class="legend-tag tag-spec">SPEC_ROW 規格</span>
+        <span class="legend-tag tag-header">PAGE_HEADER</span>
+        <span class="legend-tag tag-zone">ZONE_HEADER</span>
+        <span class="legend-tag tag-blank">BLANK</span>
+      </div>
+      <div class="tree-container">
+        <div class="tree-title">内訳書 — 階層構造ツリー（代表構造）</div>
+        <div class="t-row"><span class="t-level lv-zone">ZONE</span><span class="t-name">立坑部</span><span class="t-note">Zone区切り — R1 ～ R627</span></div>
+        <div class="t-row" style="padding-left:16px"><span class="t-indent">├─</span><span class="t-level lv-h01">H01</span><span class="t-name">撤去工</span><span class="t-note">A列 / 単位:式 / 金額なし（大分類）</span></div>
+        <div class="t-row" style="padding-left:36px"><span class="t-indent">│ ├─</span><span class="t-level lv-h02">H02</span><span class="t-name">仮壁設置工</span><span class="t-note">B列 / 単位:式</span></div>
+        <div class="t-row" style="padding-left:56px"><span class="t-indent">│ │ └─</span><span class="t-level lv-h03">H03</span><span class="t-name">仮設設置(1)</span><span class="t-note">C列 / 単位:式</span></div>
+        <div class="t-row" style="padding-left:76px"><span class="t-indent">│ │ &nbsp;&nbsp; ├─</span><span class="t-level lv-h04">H04</span><span class="t-name">鉄筋(1)</span><span class="t-note">D列 / 単位:ｔ（品名行・数値なし）</span></div>
+        <div class="t-row" style="padding-left:76px"><span class="t-indent">│ │ &nbsp;&nbsp; │ &nbsp;</span><span class="t-level lv-spec">SPEC</span><span class="t-name">SD345･D13 一般構造物</span><span class="t-cost">数量:1.6 / 単価:193,900 / 金額:310,240</span></div>
+        <div class="t-row" style="padding-left:76px"><span class="t-indent">│ │ &nbsp;&nbsp; ├─</span><span class="t-level lv-h04">H04</span><span class="t-name">型枠</span><span class="t-note">D列 / 単位:m²</span></div>
+        <div class="t-row" style="padding-left:76px"><span class="t-indent">│ │ &nbsp;&nbsp; │ &nbsp;</span><span class="t-level lv-spec">SPEC</span><span class="t-name">一般型枠 鉄筋･無筋構造物</span><span class="t-cost">数量:120 / 単価:10,510 / 金額:1,261,200</span></div>
+        <div class="t-row" style="padding-left:76px"><span class="t-indent">│ │ &nbsp;&nbsp; └─</span><span class="t-level lv-h04">H04</span><span class="t-name">コンクリート</span><span class="t-note">D列 / 単位:m³</span></div>
+        <div class="t-row" style="padding-left:76px"><span class="t-indent">│ │ &nbsp;&nbsp; &nbsp;&nbsp;&nbsp;</span><span class="t-level lv-spec">SPEC</span><span class="t-name">膨張コンクリート f'ck 24N/mm²</span><span class="t-cost">数量:29 / 単価:31,910 / 金額:925,390</span></div>
+        <div class="t-row" style="padding-left:36px"><span class="t-indent">│ └─ ...</span><span class="t-name" style="color:#607d8b;">（工種が続く）</span></div>
+        <div class="t-row" style="padding-left:16px"><span class="t-indent">├─</span><span class="t-level lv-h01">H01</span><span class="t-name">仮設工</span></div>
+        <div class="t-row" style="padding-left:16px"><span class="t-indent">├─</span><span class="t-level lv-h01">H01</span><span class="t-name">地盤改良工</span></div>
+        <div class="t-row" style="padding-left:16px"><span class="t-indent">└─ ...</span><span class="t-name" style="color:#607d8b;">（費目が続く）</span></div>
+        <div class="t-row" style="margin-top:10px"><span class="t-level lv-zone">ZONE</span><span class="t-name">駅舎改築部</span><span class="t-note">Zone区切り — R628 ～ 末尾</span></div>
+        <div class="t-row" style="padding-left:16px"><span class="t-indent">└─ ...</span><span class="t-name" style="color:#607d8b;">（同様の費目構成）</span></div>
+      </div>
+      <table>
+        <thead><tr><th>H-Level</th><th>対応列</th><th>役割</th><th>代表例</th><th>数量・金額</th></tr></thead>
+        <tbody>
+          <tr><td><span class="legend-tag tag-h01" style="font-size:11px;">H01</span></td><td><code>A列</code></td><td>費目（大区分）</td><td>撤去工 / 仮設工 / 地盤改良工</td><td>単位:式 — 金額なし（ヘッダーのみ）</td></tr>
+          <tr><td><span class="legend-tag tag-h02" style="font-size:11px;">H02</span></td><td><code>B列</code></td><td>工種</td><td>仮壁設置工 / 流動化処理土充填工</td><td>単位:式 — 金額なし</td></tr>
+          <tr><td><span class="legend-tag tag-h03" style="font-size:11px;">H03</span></td><td><code>C列</code></td><td>種別（集計行）</td><td>仮設設置(1) / 仮設設置(2)</td><td>単位:式 / 数量:1 — 金額は次行SPECに格納</td></tr>
+          <tr><td><span class="legend-tag tag-h04" style="font-size:11px;">H04</span></td><td><code>D列</code> 奇数行</td><td>細別・品名（Leaf 行1）</td><td>鉄筋(1) / 型枠 / コンクリート</td><td><strong>数量・単価・金額なし</strong>（品名と単位のみ）</td></tr>
+          <tr><td><span class="legend-tag tag-spec" style="font-size:11px;">SPEC_ROW</span></td><td><code>D列</code> 偶数行</td><td>規格・仕様（Leaf 行2）</td><td>SD345･D13 / 膨張コンクリート f'ck 24N/mm²</td><td><strong>数量・単価・金額あり</strong> — 集計のメイン行</td></tr>
+          <tr><td><span class="legend-tag tag-zone" style="font-size:11px;">ZONE</span></td><td>—</td><td>Zone区分ヘッダー</td><td>立坑部 / 駅舎改築部</td><td>数値なし</td></tr>
+          <tr><td><span class="legend-tag tag-header" style="font-size:11px;">PAGE_HDR</span></td><td>—</td><td>ページ繰り返しヘッダー</td><td>費目・工種・種別・細別・規格 / 単位…</td><td>数値なし — フラット化時に除外</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ③ Zone分析 -->
+  <div class="card">
+    <div class="card-head">
+      <div class="sec-num">③</div>
+      <h2>Zone 分析</h2>
+      <span class="badge badge-purple">2 Zone — 立坑部 / 駅舎改築部</span>
+    </div>
+    <div class="card-body">
+      <table class="zone-table" style="margin-bottom:20px;">
+        <thead><tr><th>Zone</th><th>開始行</th><th>区分内容</th><th>工事費概算</th><th>構成比</th><th>金額バー</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="legend-tag tag-h01" style="font-size:11px;">Zone 1</span></td>
+            <td>R1</td><td><strong>立坑部</strong> — 地下立坑躯体工事</td><td>¥79.8億</td><td>45.6%</td>
+            <td style="width:200px"><div class="zone-bar-bg"><div class="zone-bar-fill zone-1-color" style="width:45.6%"></div></div></td>
+          </tr>
+          <tr>
+            <td><span class="legend-tag tag-h02" style="font-size:11px;">Zone 2</span></td>
+            <td>R628</td><td><strong>駅舎改築部</strong> — 駅舎改築・躯体新設工事</td><td>¥95.3億</td><td>54.4%</td>
+            <td style="width:200px"><div class="zone-bar-bg"><div class="zone-bar-fill zone-2-color" style="width:54.4%"></div></div></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="two-col">
+        <div>
+          <div class="evidence-box">
+            <div class="ev-label">Zone検出 Evidence</div>
+            A列に「立坑部」が R1 に出現 → Zone 1 開始。<br>
+            A列に「駅舎改築部」が R628 に出現 → Zone 2 開始。<br>
+            Zone情報は <code>zone_label</code> 列として全後続行へ伝搬。
+          </div>
+          <div style="margin-top:14px">
+            <table>
+              <thead><tr><th>Zone_Block 特性</th><th>値</th></tr></thead>
+              <tbody>
+                <tr><td>Zone 数</td><td><strong>2</strong></td></tr>
+                <tr><td>Zone 1 行数</td><td>約627行（R1〜R627）</td></tr>
+                <tr><td>Zone 2 行数</td><td>約3,993行（R628〜末尾）</td></tr>
+                <tr><td>Zone切替識別</td><td>A列テキスト一致</td></tr>
+                <tr><td>Zone情報伝搬</td><td>次のZone出現まで全行に適用</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px; color:#888; margin-bottom:8px;">費目別工事費構成（H01ベース推定）</div>
+          <div class="chart-wrap-bar"><canvas id="zoneChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 行タイプ分布 -->
+  <div class="card">
+    <div class="card-head">
+      <div class="sec-num">④</div>
+      <h2>行タイプ分布 — 4,620行の内訳</h2>
+      <span class="badge badge-amber">Two_Row_Item により Leaf が2行ペア構成</span>
+    </div>
+    <div class="card-body">
+      <div class="two-col">
+        <div><div class="chart-wrap"><canvas id="typeChart"></canvas></div></div>
+        <div>
+          <div class="type-grid">
+            <div class="type-card" style="border-color:#8bc34a;"><div class="tc-label">WORK_TYPE_HEADER (H04品名)</div><div class="tc-num">~1,580</div><div class="tc-pct">34.2%</div></div>
+            <div class="type-card" style="border-color:#e65100;"><div class="tc-label">SPEC_ROW（規格行）</div><div class="tc-num">~1,580</div><div class="tc-pct">34.2%</div></div>
+            <div class="type-card" style="border-color:#9c27b0;"><div class="tc-label">PAGE_HEADER（繰返）</div><div class="tc-num">~700</div><div class="tc-pct">15.2%</div></div>
+            <div class="type-card" style="border-color:#4caf8a;"><div class="tc-label">H03 種別集計行</div><div class="tc-num">~320</div><div class="tc-pct">6.9%</div></div>
+            <div class="type-card" style="border-color:#2e7d9b;"><div class="tc-label">H02 工種</div><div class="tc-num">~180</div><div class="tc-pct">3.9%</div></div>
+            <div class="type-card" style="border-color:#1a3a5c;"><div class="tc-label">H01 費目</div><div class="tc-num">~40</div><div class="tc-pct">0.9%</div></div>
+            <div class="type-card" style="border-color:#1565c0;"><div class="tc-label">ZONE_HEADER</div><div class="tc-num">2</div><div class="tc-pct">0.04%</div></div>
+            <div class="type-card" style="border-color:#e0e0e0;"><div class="tc-label">BLANK / PAGE_NO</div><div class="tc-num">~218</div><div class="tc-pct">4.7%</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="evidence-box" style="margin-top:16px;">
+        <div class="ev-label">Two_Row_Item 行数バランス Evidence</div>
+        WORK_TYPE_HEADER（品名行）と SPEC_ROW（規格行）がほぼ同数（1:1対応）。
+        これは Two_Row_Item 構造の典型的なシグネチャ。
+        H03集計行（単位:式 / 数量:1）も直後に集計SPEC_ROWを持つ場合があるため、
+        ペア判定ロジックでは金額の有無を必ず確認すること。
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ 新規パターン候補 -->
+  <div class="card">
+    <div class="card-head">
+      <div class="sec-num">⑤</div>
+      <h2>新規パターン候補 — PATTERN_LIBRARY 登録対象</h2>
+      <span class="badge badge-red">APPLY 時に登録</span>
+    </div>
+    <div class="card-body">
+      <div class="pattern-grid">
+        <div class="pattern-card">
+          <div class="p-head"><span class="pattern-tag">NEW</span>TYPE_COLUMN_HIERARCHY_4L</div>
+          <div class="p-body">A〜D列の4列を階層として使用する日本式BOQ。コードなし・インデントなし。列の「どこに値があるか」のみで階層を判定する最もシンプルな構造。<br><br><code>Evidence: A列=H01 / B列=H02 / C列=H03 / D列=H04</code></div>
+        </div>
+        <div class="pattern-card">
+          <div class="p-head"><span class="pattern-tag">NEW</span>TWO_ROW_ITEM_TYPE_B（規格分離型）</div>
+          <div class="p-body">品名行（奇数行）に品名と単位のみ記載し、規格・数値を次行（偶数行）に分離する2行ペア構造。TYPE_A（同一行内での品名＋規格）と区別するために TYPE_B とする。<br><br><code>Evidence: D列奇数行=品名, D列偶数行=規格テキスト+数値</code></div>
+        </div>
+        <div class="pattern-card">
+          <div class="p-head"><span class="pattern-tag">NEW</span>ZONE_LABEL_IN_A_COLUMN</div>
+          <div class="p-body">Zone区切りラベル（「立坑部」「駅舎改築部」）がH01費目と同じA列に出現するパターン。Zone_HeaderとH01の識別には、直後に数値系データがなく子階層が続くかどうかで判定する。<br><br><code>Evidence: A列に「部」「区」を含む短テキスト → ZONE_HEADER</code></div>
+        </div>
+        <div class="pattern-card">
+          <div class="p-head"><span class="pattern-tag">NEW</span>REPEATED_HEADER_FIXED_INTERVAL</div>
+          <div class="p-body">ページヘッダー行が約33行間隔で規則的に出現するパターン。「費目・工種・種別・細別・規格」という固定テキストで識別可能。PAGE_NO行（数字のみ）もセットで出現する。<br><br><code>Evidence: A列=「費目」→ PAGE_HEADER / A列=数字のみ → PAGE_NO</code></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑥ 注意事項 -->
+  <div class="card">
+    <div class="card-head">
+      <div class="sec-num">⑥</div>
+      <h2>処理上の注意事項</h2>
+    </div>
+    <div class="card-body">
+      <div class="notice-list">
+        <div class="notice-item warn">
+          <span class="notice-icon">⚠️</span>
+          <div class="notice-text">
+            <strong>Two_Row_Item ペア判定の例外処理</strong>
+            H03集計行（単位:式 / 数量:1）の直後行も SPEC_ROW 形式を持つ場合がある。品名行（H04）か集計行（H03）かの区別は「金額の有無」と「階層列の位置」で判定する。H04品名行は金額なし、H03集計の次行（式/1）は金額あり。
+          </div>
+        </div>
+        <div class="notice-item warn">
+          <span class="notice-icon">⚠️</span>
+          <div class="notice-text">
+            <strong>ページヘッダー・ページ番号行の除外</strong>
+            R4, R37, R70… と約33行間隔でページヘッダー（5行構成）が出現。A列=「費目」テキスト一致で <code>PAGE_HEADER</code> として除外。A列が数字のみの行は <code>PAGE_ARTIFACT</code> として除外。
+          </div>
+        </div>
+        <div class="notice-item warn">
+          <span class="notice-icon">⚠️</span>
+          <div class="notice-text">
+            <strong>Zone区切り行とH01費目行の識別</strong>
+            Zone区切り（「立坑部」「駅舎改築部」）はA列に出現するためH01と同じ列。識別方法：「部」「区」等の接尾辞 or 直後にB列以下の子階層が続くかどうかで判定。
+          </div>
+        </div>
+        <div class="notice-item info">
+          <span class="notice-icon">ℹ️</span>
+          <div class="notice-text">
+            <strong>金額格納列の確認</strong>
+            金額はM列（列14）、単価はK列（列12）に格納。H01〜H03の集計行の金額は直後のSPEC_ROW行に入る構造。SPEC_ROW行の金額列（M列）を集計に使用する。
+          </div>
+        </div>
+        <div class="notice-item info">
+          <span class="notice-icon">ℹ️</span>
+          <div class="notice-text">
+            <strong>LABEL_DRAFT における SPEC_ROW の扱い</strong>
+            SPEC_ROW は <code>row_type_label = "SPEC_ROW"</code> として記録。<code>h_level</code> は null（階層外）、<code>is_leaf_label = false</code>。<code>h04_path</code> には親WORK_TYPE行の品名を引き継ぐ。
+          </div>
+        </div>
+        <div class="notice-item ok">
+          <span class="notice-icon">✅</span>
+          <div class="notice-text">
+            <strong>Column_Hierarchy による高精度な階層判定</strong>
+            A〜D列のいずれに値があるかのみで階層レベルを一意に判定できるため、インデント数値の揺らぎや曖昧なコード体系に依存しない。日本式BOQの中でも特に構造が明確なタイプ。
+          </div>
+        </div>
+        <div class="notice-item ok">
+          <span class="notice-icon">✅</span>
+          <div class="notice-text">
+            <strong>エラー検出結果 — 構造エラー 0件</strong>
+            DUPLICATE_CODE / HIERARCHY_BREAK / MISSING_SUBTOTAL 等、Phase 1（構造基準）全8項目で問題なし。Column_Hierarchy により階層の整合性が保たれている。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">Structure Analysis Report · 羽田空港アクセス鉄道 · 内訳書 · 分析日 2026-04-06 · Column_Hierarchy + Two_Row_Item + Zone_Block + Repeated_Header</div>
+
+<script>
+  const typeCtx = document.getElementById('typeChart').getContext('2d');
+  new Chart(typeCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['WORK_TYPE_HEADER','SPEC_ROW','PAGE_HEADER','H03種別','H02工種','H01費目','BLANK/その他','ZONE_HEADER'],
+      datasets: [{ data:[1580,1580,700,320,180,40,218,2], backgroundColor:['#8bc34a','#e65100','#9c27b0','#4caf8a','#2e7d9b','#1a3a5c','#e0e0e0','#1565c0'], borderWidth:2, borderColor:'#fff' }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend:{ position:'right', labels:{ font:{size:11}, padding:10, boxWidth:14 } },
+        tooltip:{ callbacks:{ label: ctx => { const total=ctx.dataset.data.reduce((a,b)=>a+b,0); const pct=((ctx.parsed/total)*100).toFixed(1); return ` ${ctx.label}: ${ctx.parsed.toLocaleString()}行 (${pct}%)`; } } }
+      }
+    }
+  });
+
+  const zoneCtx = document.getElementById('zoneChart').getContext('2d');
+  new Chart(zoneCtx, {
+    type: 'bar',
+    data: {
+      labels: ['躯体工','地盤改良工','仮設工','撤去工','土工','その他'],
+      datasets: [{ label:'工事費（億円）', data:[58.2,42.5,28.7,18.4,15.3,12.0], backgroundColor:['#0f3460','#2e7d9b','#4caf8a','#8bc34a','#f0c060','#bdbdbd'], borderRadius:4, borderSkipped:false }]
+    },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{display:false}, tooltip:{ callbacks:{ label: ctx => ` ¥${ctx.parsed.x}億円` } } },
+      scales: {
+        x:{ grid:{color:'#f0f2f5'}, ticks:{font:{size:11}, callback: v => '¥'+v+'億'} },
+        y:{ ticks:{font:{size:11}} }
+      }
+    }
+  });
+</script>
+</body>
+</html>
