@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOQ Analysis — 羽田空港鉄道</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e2e8f0; font-family: 'Segoe UI', 'Noto Sans JP', sans-serif; font-size: 13px; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: .5px; }
+  .badge-jp  { background: #1e3a5f; color: #60a5fa; }
+  .badge-boq { background: #1e3a2a; color: #4ade80; }
+  .badge-type { background: #2d1e3a; color: #c084fc; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 4px; }
+  .tag-h01 { background:#1b2540; color:#93c5fd; }
+  .tag-h02 { background:#0e3745; color:#67e8f9; }
+  .tag-h03 { background:#163530; color:#7dd3fc; }
+  .tag-h04 { background:#0a3d29; color:#6ee7b7; }
+  .tag-leaf { background:#14532d; color:#86efac; }
+  .tag-branch { background:#292524; color:#a8a29e; }
+  .tag-hdr { background:#1e1b4b; color:#a5b4fc; }
+  .tag-spec { background:#1c1c1c; color:#6b7280; }
+  .tag-zone { background:#1b2540; color:#93c5fd; }
+  .section { padding: 32px 40px; border-bottom: 1px solid #1e293b; }
+  .section-title { font-size: 15px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; }
+  .kv { display: flex; gap: 8px; margin-bottom: 6px; }
+  .kv-key { color: #64748b; min-width: 180px; }
+  .kv-val { color: #e2e8f0; }
+  .highlight { color: #60a5fa; font-weight: 600; }
+  .ok { color: #4ade80; }
+
+  .page-header { padding: 28px 40px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; justify-content: space-between; }
+  .page-header h1 { font-size: 22px; font-weight: 700; color: #f1f5f9; }
+  .page-header .sub { font-size: 12px; color: #475569; margin-top: 4px; }
+  .badges { display: flex; gap: 8px; align-items: center; }
+
+  .feature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px; }
+  .feature-card { background: #161b27; border: 1px solid #1e293b; border-radius: 8px; padding: 14px; }
+  .feature-card.yes { border-color: #1d4ed8; }
+  .feature-card.no  { border-color: #292524; }
+  .feature-name { font-size: 11px; color: #64748b; margin-bottom: 6px; font-weight: 600; text-transform: uppercase; }
+  .feature-val  { font-size: 14px; font-weight: 700; }
+  .feature-val.yes-val { color: #4ade80; }
+  .feature-val.no-val  { color: #6b7280; }
+  .feature-ev { font-size: 10px; color: #475569; margin-top: 4px; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat-card { background: #161b27; border: 1px solid #1e293b; border-radius: 8px; padding: 14px; text-align: center; }
+  .stat-num { font-size: 22px; font-weight: 700; color: #60a5fa; }
+  .stat-lbl { font-size: 11px; color: #64748b; margin-top: 4px; }
+
+  .cost-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .cost-table th { background: #161b27; color: #64748b; font-size: 11px; text-align: left; padding: 8px 12px; border-bottom: 1px solid #1e293b; text-transform: uppercase; }
+  .cost-table td { padding: 8px 12px; border-bottom: 1px solid #131920; }
+  .cost-table tr:hover td { background: #161b27; }
+  .bar-wrap { width: 160px; background: #1e293b; border-radius: 3px; height: 8px; display: inline-block; vertical-align: middle; }
+  .bar-fill { height: 8px; border-radius: 3px; background: #3b82f6; }
+  .amt-cell { text-align: right; color: #a5b4fc; font-family: monospace; font-size: 12px; }
+  .pct-cell { text-align: right; color: #64748b; font-size: 11px; min-width: 44px; }
+  .cnt-cell { text-align: right; color: #475569; font-size: 11px; }
+  .gou-cell { color: #475569; font-size: 11px; }
+  .zone-cell { font-weight: 600; }
+
+  .diagram-wrap { width: 1280px; min-height: 720px; background: #0f1117; border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; margin: 0 auto; }
+  .diagram-header { padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; }
+  .diagram-header .title { font-size: 16px; font-weight: 700; color: #f1f5f9; }
+  .diagram-header .desc { font-size: 11px; color: #475569; margin-top: 2px; }
+  .diagram-body { display: grid; grid-template-columns: 1fr 56px 1fr; gap: 0; padding: 16px 24px; }
+  .col-label { font-size: 10px; color: #475569; text-transform: uppercase; letter-spacing: 1px; padding: 0 0 8px 4px; font-weight: 600; }
+
+  .orig-table { width: 100%; border-collapse: collapse; }
+  .orig-table th { background: #0d1117; color: #475569; font-size: 10px; padding: 5px 8px; border-bottom: 1px solid #1e293b; text-align: left; white-space: nowrap; }
+  .orig-table td { padding: 5px 8px; border-bottom: 1px solid #0d1117; font-size: 11px; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+  .row-h01  { background: #1b2540; color: #93c5fd; }
+  .row-h02  { background: #0e3745; color: #67e8f9; }
+  .row-h03  { background: #163530; color: #7dd3fc; }
+  .row-h04  { background: #0a3d29; color: #6ee7b7; }
+  .row-h05  { background: #0f1825; color: #f1f5f9; }
+  .row-spec { background: #0d1117; color: #6b7280; }
+  .row-ellipsis td { background: #0d1117; color: #374151; font-style: italic; }
+  .row-num  { color: #374151; font-size: 10px; min-width: 30px; }
+  .num-val  { text-align: right; color: #a5b4fc; font-family: monospace; font-size: 10px; }
+
+  .arrow-col { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  .arrow-label { font-size: 9px; color: #4ade80; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; writing-mode: vertical-rl; transform: rotate(180deg); }
+  .arrow-svg { opacity: .6; }
+
+  .flat-table { width: 100%; border-collapse: collapse; }
+  .flat-table th { background: #0d1117; color: #475569; font-size: 10px; padding: 5px 6px; border-bottom: 1px solid #1e293b; text-align: left; white-space: nowrap; }
+  .flat-table td { padding: 5px 6px; border-bottom: 1px solid #0d1117; font-size: 10px; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+  .fc-h01 { background: #1e2d5080; color: #93c5fd; }
+  .fc-h02 { background: #0e374580; color: #67e8f9; }
+  .fc-h03 { background: #0e374580; color: #7dd3fc; }
+  .fc-h04 { background: #0a3d2980; color: #6ee7b7; }
+  .fc-leaf { background: #14532d60; color: #86efac; }
+  .fc-amt  { background: #1c1c3080; color: #a5b4fc; text-align: right; font-family: monospace; }
+  .fc-unit { color: #64748b; text-align: center; }
+  .fc-qty  { color: #94a3b8; text-align: right; font-family: monospace; }
+
+  .bottom-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 24px; }
+  .box-flatten { background: #0d1f17; border: 1px solid #065f46; border-radius: 6px; padding: 14px; }
+  .box-note    { background: #141424; border: 1px solid #1e3a5f; border-radius: 6px; padding: 14px; }
+  .box-title { font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+  .box-title.green { color: #4ade80; }
+  .box-title.blue  { color: #60a5fa; }
+  .box-item { font-size: 11px; color: #94a3b8; margin-bottom: 4px; padding-left: 12px; position: relative; }
+  .box-item::before { content: '▸'; position: absolute; left: 0; color: #4ade80; }
+  .box-item.blue::before { color: #60a5fa; }
+
+  .note-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .note-card { background: #161b27; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; }
+  .note-card-title { font-size: 12px; font-weight: 700; color: #94a3b8; margin-bottom: 10px; }
+  .note-item { font-size: 12px; color: #64748b; margin-bottom: 6px; padding-left: 14px; position: relative; }
+  .note-item::before { content: '•'; position: absolute; left: 0; color: #3b82f6; }
+  .divider { border: none; border-top: 2px solid #1e293b; margin: 0; }
+</style>
+</head>
+<body>
+
+<!-- ── ページヘッダー ── -->
+<div class="page-header">
+  <div>
+    <h1>令和6年度 東京国際空港 空港アクセス鉄道 駅舎改築工事</h1>
+    <div class="sub">하네다_공항철도_내역서.xlsx · 内訳書 · 分析日時: 2026-05-04 · v2 (H01 13区域拡張 + is_leaf修正)</div>
+  </div>
+  <div class="badges">
+    <span class="badge badge-jp">JP</span>
+    <span class="badge badge-boq">BOQ</span>
+    <span class="badge badge-type">TYPE_COLUMN_TWOR_SECTION</span>
+  </div>
+</div>
+
+<!-- ── §1 ファイル概要 ── -->
+<div class="section">
+  <div class="section-title">§1 · ファイル概要</div>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-num">4,620</div><div class="stat-lbl">総行数</div></div>
+    <div class="stat-card"><div class="stat-num highlight">1,169</div><div class="stat-lbl">LEAF項目</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#a78bfa">677</div><div class="stat-lbl">BRANCH項目</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#67e8f9">12</div><div class="stat-lbl">H01区域</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#4ade80">H1〜H5</div><div class="stat-lbl">階層深度</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+    <div>
+      <div class="kv"><span class="kv-key">ファイル名</span><span class="kv-val">하네다_공항철도_내역서.xlsx</span></div>
+      <div class="kv"><span class="kv-key">分析対象シート</span><span class="kv-val">内訳書 (4,620行)</span></div>
+      <div class="kv"><span class="kv-key">国 / 言語</span><span class="kv-val">JP / 日本語</span></div>
+      <div class="kv"><span class="kv-key">Structure_Type</span><span class="kv-val" style="color:#c084fc">TYPE_COLUMN_TWOR_SECTION</span></div>
+      <div class="kv"><span class="kv-key">H01定義</span><span class="kv-val">工区・費目大区分 (立坑部・駅舎改築部 等 12セクション)</span></div>
+    </div>
+    <div>
+      <div class="kv"><span class="kv-key">LEAF金額合計</span><span class="kv-val ok" style="font-size:16px;font-weight:700;">¥11,597,202,077</span></div>
+      <div class="kv"><span class="kv-key">検証基準</span><span class="kv-val">号内訳書 1〜11号 合計</span></div>
+      <div class="kv"><span class="kv-key">検証結果</span><span class="kv-val ok">差異 0円 ✓</span></div>
+      <div class="kv"><span class="kv-key">総工事費 (工事費計)</span><span class="kv-val">¥19,265,345,000 (消費税込み)</span></div>
+      <div class="kv"><span class="kv-key">Flattenカバレッジ</span><span class="kv-val">号内訳書 直接工事 全範囲</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── §2 構造フィーチャー分析 ── -->
+<div class="section">
+  <div class="section-title">§2 · 構造フィーチャー分析</div>
+  <div class="feature-grid">
+    <div class="feature-card no"><div class="feature-name">Code_Hierarchy</div><div class="feature-val no-val">NO</div><div class="feature-ev">コード列なし — テキスト＋列位置のみで階層表現</div></div>
+    <div class="feature-card yes"><div class="feature-name">Column_Hierarchy</div><div class="feature-val yes-val">YES</div><div class="feature-ev">A=費目 B=工種 C=種別 D=細別 (4列分離)</div></div>
+    <div class="feature-card yes"><div class="feature-name">Two_Row_Item</div><div class="feature-val yes-val">YES</div><div class="feature-ev">HDR(品目名+単位) + SPEC(規格+数量+単価+金額)</div></div>
+    <div class="feature-card yes"><div class="feature-name">Zone_Block</div><div class="feature-val yes-val">YES</div><div class="feature-ev">12個のH01 Zone (A列単独マーカー 142回)</div></div>
+    <div class="feature-card yes"><div class="feature-name">Section_Repeated</div><div class="feature-val yes-val">YES</div><div class="feature-ev">33行周期 COL_HEADER繰り返し (140回)</div></div>
+    <div class="feature-card yes"><div class="feature-name">Repeated_Header</div><div class="feature-val yes-val">YES</div><div class="feature-ev">費目・工種・種別・細別・規格 ヘッダー 各ページ再出力</div></div>
+    <div class="feature-card no"><div class="feature-name">Overview_Row</div><div class="feature-val no-val">NO</div><div class="feature-ev">内訳書シートに総計行なし (総括表別途)</div></div>
+    <div class="feature-card no"><div class="feature-name">その他の行</div><div class="feature-val no-val" style="color:#475569">—</div><div class="feature-ev">PAGE_COUNTER(140) · EMPTY(489) · PAGE_REF行 存在</div></div>
+  </div>
+  <div style="margin-top:16px;">
+    <div class="kv"><span class="kv-key">行タイプ分布</span>
+      <span class="kv-val">
+        <span class="tag tag-spec">SPEC_ROW 1,860</span>
+        <span class="tag tag-hdr">H05_HDR 1,096</span>
+        <span class="tag tag-h04">H04_HDR 483</span>
+        <span class="tag tag-h03">H03_HDR 218</span>
+        <span class="tag tag-h02">H02_HDR 52</span>
+        <span class="tag tag-zone">ZONE_MARKER 142</span>
+        <span class="tag tag-branch">EMPTY+PAGE 769</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- ── §3 H01コスト構成 ── -->
+<div class="section">
+  <div class="section-title">§3 · H01コスト構成</div>
+  <table class="cost-table">
+    <thead>
+      <tr>
+        <th>号</th><th>区域 (H01)</th>
+        <th style="text-align:right">金額 (円)</th>
+        <th style="text-align:right">比率</th>
+        <th>比率グラフ</th>
+        <th style="text-align:right">LEAF</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="gou-cell">1号</td><td class="zone-cell" style="color:#93c5fd">立坑部</td><td class="amt-cell">1,124,206,081</td><td class="pct-cell">9.69%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:20%"></div></div></td><td class="cnt-cell">149</td></tr>
+      <tr><td class="gou-cell">2号</td><td class="zone-cell" style="color:#93c5fd">駅舎改築部</td><td class="amt-cell">239,574,727</td><td class="pct-cell">2.07%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:4%"></div></div></td><td class="cnt-cell">25</td></tr>
+      <tr><td class="gou-cell">3号</td><td class="zone-cell" style="color:#93c5fd">駅舎新設部</td><td class="amt-cell" style="color:#60a5fa;font-weight:700">5,711,995,468</td><td class="pct-cell" style="color:#60a5fa">49.25%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:100%;background:#1d4ed8"></div></div></td><td class="cnt-cell">411</td></tr>
+      <tr><td class="gou-cell">4号</td><td class="zone-cell" style="color:#93c5fd">連絡通路部</td><td class="amt-cell">2,168,530,111</td><td class="pct-cell">18.70%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:38%"></div></div></td><td class="cnt-cell">192</td></tr>
+      <tr><td class="gou-cell">5号</td><td class="zone-cell" style="color:#93c5fd">F階段部</td><td class="amt-cell">651,750,295</td><td class="pct-cell">5.62%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:11%"></div></div></td><td class="cnt-cell">144</td></tr>
+      <tr><td class="gou-cell">6号</td><td class="zone-cell" style="color:#93c5fd">T1連絡階段・T1連絡通路部</td><td class="amt-cell">906,751,131</td><td class="pct-cell">7.82%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:16%"></div></div></td><td class="cnt-cell">103</td></tr>
+      <tr><td class="gou-cell">7号</td><td class="zone-cell" style="color:#93c5fd">共通部</td><td class="amt-cell">155,223,674</td><td class="pct-cell">1.34%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:3%"></div></div></td><td class="cnt-cell">72</td></tr>
+      <tr style="border-top:1px solid #1e293b;"><td class="gou-cell">8号</td><td class="zone-cell" style="color:#67e8f9">運搬費</td><td class="amt-cell">198,062,468</td><td class="pct-cell">1.71%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:3.5%;background:#0891b2"></div></div></td><td class="cnt-cell">51</td></tr>
+      <tr><td class="gou-cell">9号</td><td class="zone-cell" style="color:#67e8f9">事業損失防止施設費</td><td class="amt-cell">415,125,900</td><td class="pct-cell">3.58%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:7%;background:#0891b2"></div></div></td><td class="cnt-cell">6</td></tr>
+      <tr><td class="gou-cell">10号</td><td class="zone-cell" style="color:#67e8f9">技術管理費</td><td class="amt-cell">8,308,200</td><td class="pct-cell">0.07%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:0.5%;background:#0891b2"></div></div></td><td class="cnt-cell">13</td></tr>
+      <tr><td class="gou-cell">12号</td><td class="zone-cell" style="color:#67e8f9">地質調査</td><td class="amt-cell">17,644,822</td><td class="pct-cell">0.15%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:0.3%;background:#0891b2"></div></div></td><td class="cnt-cell">2</td></tr>
+      <tr><td class="gou-cell">13号</td><td class="zone-cell" style="color:#67e8f9">六価クロム</td><td class="amt-cell">29,200</td><td class="pct-cell">&lt;0.01%</td><td><div class="bar-wrap"><div class="bar-fill" style="width:0.1%;background:#0891b2"></div></div></td><td class="cnt-cell">1</td></tr>
+      <tr style="border-top:2px solid #1e293b;background:#0f1117">
+        <td colspan="2" style="font-weight:700;color:#94a3b8;padding:8px 12px;">合計</td>
+        <td class="amt-cell" style="color:#4ade80;font-weight:700;font-size:13px">11,597,202,077</td>
+        <td class="pct-cell" style="color:#4ade80">100.00%</td>
+        <td></td>
+        <td class="cnt-cell" style="color:#4ade80">1,169</td>
+      </tr>
+    </tbody>
+  </table>
+  <div style="margin-top:20px;">
+    <div class="section-title" style="font-size:12px;margin-bottom:10px;">費目(H02) 金額上位</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <div style="background:#161b27;border:1px solid #1e293b;border-radius:6px;padding:10px 16px;min-width:180px">
+        <div style="color:#67e8f9;font-size:11px;font-weight:700">仮設工</div>
+        <div style="color:#a5b4fc;font-size:13px;font-weight:700;margin-top:4px">¥4,742,807,916</div>
+        <div style="color:#475569;font-size:10px">463件 · 40.9%</div>
+      </div>
+      <div style="background:#161b27;border:1px solid #1e293b;border-radius:6px;padding:10px 16px;min-width:180px">
+        <div style="color:#67e8f9;font-size:11px;font-weight:700">撤去工</div>
+        <div style="color:#a5b4fc;font-size:13px;font-weight:700;margin-top:4px">¥3,151,003,910</div>
+        <div style="color:#475569;font-size:10px">372件 · 27.2%</div>
+      </div>
+      <div style="background:#161b27;border:1px solid #1e293b;border-radius:6px;padding:10px 16px;min-width:180px">
+        <div style="color:#67e8f9;font-size:11px;font-weight:700">地盤改良工</div>
+        <div style="color:#a5b4fc;font-size:13px;font-weight:700;margin-top:4px">¥1,962,615,860</div>
+        <div style="color:#475569;font-size:10px">97件 · 16.9%</div>
+      </div>
+      <div style="background:#161b27;border:1px solid #1e293b;border-radius:6px;padding:10px 16px;min-width:180px">
+        <div style="color:#67e8f9;font-size:11px;font-weight:700">土工</div>
+        <div style="color:#a5b4fc;font-size:13px;font-weight:700;margin-top:4px">¥680,636,612</div>
+        <div style="color:#475569;font-size:10px">53件 · 5.9%</div>
+      </div>
+      <div style="background:#161b27;border:1px solid #1e293b;border-radius:6px;padding:10px 16px;min-width:180px">
+        <div style="color:#67e8f9;font-size:11px;font-weight:700">本体工</div>
+        <div style="color:#a5b4fc;font-size:13px;font-weight:700;margin-top:4px">¥420,009,464</div>
+        <div style="color:#475569;font-size:10px">91件 · 3.6%</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── §4 構造特記事項・解釈上の注意点 ── -->
+<div class="section">
+  <div class="section-title">§4 · 構造特記事項・解釈上の注意点</div>
+  <div class="note-grid">
+    <div class="note-card">
+      <div class="note-card-title" style="color:#67e8f9">非ゾーンセクション (8〜13号)</div>
+      <div class="note-item">運搬費(8号)・事業損失防止施設費(9号)・技術管理費(10号)は共通仮設費に属するが、内訳書ではH01レベルとして独立配置</div>
+      <div class="note-item">その他(11号)ページ内に地質調査・六価クロムがA列に出現 → H01_ZONESへの登録必須 (未登録時はZONE_MARKER未検出)</div>
+      <div class="note-item">12号・13号の詳細ページが別途存在 — その他ページ内の参照金額はスキップ、詳細ページでleaf収集</div>
+    </div>
+    <div class="note-card">
+      <div class="note-card-title" style="color:#4ade80">Two_Row_Item 直結構造</div>
+      <div class="note-item">通常構造: H05_HDR + SPEC (price有) → LEAF</div>
+      <div class="note-item">直結構造: H02/H03_HDR + SPEC (price有) → LEAF (運搬費・事業損失防止施設費・技術管理費・地質調査 セクション)</div>
+      <div class="note-item">集計構造: H02〜H04_HDR + SPEC (price=None、金額のみ) → BRANCH — 二重計上なし</div>
+    </div>
+    <div class="note-card">
+      <div class="note-card-title" style="color:#c084fc">ページ繰り返し構造</div>
+      <div class="note-item">33行周期 PAGE_COUNTER + ZONE_MARKER + COL_HEADER繰り返し (計142ページ)</div>
+      <div class="note-item">同一Zoneが複数ページにまたがる → ZONE_MARKER重複出現、H01コンテキストは最後のマーカーを基準</div>
+      <div class="note-item">COL_HEADER行 ("費目・工種…") 140回 — パース時に必ずフィルタリング</div>
+    </div>
+    <div class="note-card">
+      <div class="note-card-title" style="color:#fbbf24">FOOTERカバレッジ</div>
+      <div class="note-item">Flatten合計(11.6B) vs 工事価格(17.5B) 差異 約5.9B — エラーではない</div>
+      <div class="note-item">未含項目: 共通仮設費(率計上) 902M + 現場管理費 3,577M + 一般管理費等 1,428M</div>
+      <div class="note-item">これらは総括表で率計上 — JP BOQ標準構造 (FOOTER_STANDARD)</div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ── §5 BOQ構造 → Flatten 比較図 ── -->
+<div class="section" style="padding:24px 40px">
+  <div class="section-title">§5 · BOQ構造 → Flatten 比較図</div>
+
+  <div class="diagram-wrap">
+    <div class="diagram-header">
+      <div>
+        <div class="title">JP BOQ — Column Hierarchy + Two-Row Item</div>
+        <div class="desc">立坑部 (1号) サンプル · H01〜H05 5階層 · HDR行+SPEC行ペア構造 → Flatten LineItem</div>
+      </div>
+      <div class="badges">
+        <span class="badge badge-jp">JP</span>
+        <span class="badge badge-boq">Column_Hierarchy</span>
+        <span class="badge badge-type">Two_Row_Item</span>
+      </div>
+    </div>
+
+    <div class="diagram-body">
+      <!-- 左側: 原本 -->
+      <div>
+        <div class="col-label">原本内訳書 (内訳書シート)</div>
+        <table class="orig-table">
+          <thead>
+            <tr>
+              <th class="row-num">#</th>
+              <th>A列 (費目)</th><th>B列 (工種)</th><th>C列 (種別)</th><th>D列 (細別)</th>
+              <th>単位</th><th>数量</th><th>単価</th><th>金額</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="row-h01">
+              <td class="row-num">R1</td>
+              <td colspan="4" style="font-weight:700">立坑部</td>
+              <td></td><td></td><td style="color:#475569;font-size:10px">1号内訳書</td><td></td>
+              <td><span class="tag tag-h01">H01</span><span class="tag tag-zone">ZONE</span></td>
+            </tr>
+            <tr class="row-h02">
+              <td class="row-num">R5</td>
+              <td style="font-weight:600">撤去工</td><td></td><td></td><td></td>
+              <td>式</td><td></td><td></td><td></td>
+              <td><span class="tag tag-h02">H02</span><span class="tag tag-hdr">HDR</span></td>
+            </tr>
+            <tr class="row-spec">
+              <td class="row-num">R6</td>
+              <td></td><td></td><td></td><td></td>
+              <td></td><td class="num-val">1</td><td></td><td class="num-val">518,347,665</td>
+              <td><span class="tag tag-spec">SPEC</span><span class="tag tag-branch">BRANCH</span></td>
+            </tr>
+            <tr class="row-h03">
+              <td class="row-num">R7</td>
+              <td></td><td style="font-weight:600">仮壁設置工</td><td></td><td></td>
+              <td>式</td><td></td><td></td><td></td>
+              <td><span class="tag tag-h03">H03</span><span class="tag tag-hdr">HDR</span></td>
+            </tr>
+            <tr class="row-h04">
+              <td class="row-num">R9</td>
+              <td></td><td></td><td style="font-weight:600">仮設設置(1)</td><td></td>
+              <td>式</td><td></td><td></td><td></td>
+              <td><span class="tag tag-h04">H04</span><span class="tag tag-hdr">HDR</span></td>
+            </tr>
+            <tr class="row-h05">
+              <td class="row-num">R11</td>
+              <td></td><td></td><td></td><td>鉄筋(1)</td>
+              <td>ｔ</td><td></td><td></td><td></td>
+              <td><span class="tag tag-hdr">H05·HDR</span></td>
+            </tr>
+            <tr class="row-spec" style="background:#0f1825">
+              <td class="row-num">R12</td>
+              <td></td><td></td><td></td><td style="color:#94a3b8;font-size:10px" title="SD345･D13 一般構造物">SD345･D13 一般構造物</td>
+              <td></td><td class="num-val">1.6</td><td class="num-val">193,900</td><td class="num-val" style="color:#86efac">310,240</td>
+              <td><span class="tag tag-spec">SPEC</span><span class="tag tag-leaf">LEAF</span></td>
+            </tr>
+            <tr class="row-h05">
+              <td class="row-num">R13</td>
+              <td></td><td></td><td></td><td>鉄筋(2)</td>
+              <td>ｔ</td><td></td><td></td><td></td>
+              <td><span class="tag tag-hdr">H05·HDR</span></td>
+            </tr>
+            <tr class="row-spec" style="background:#0f1825">
+              <td class="row-num">R14</td>
+              <td></td><td></td><td></td><td style="color:#94a3b8;font-size:10px">SD345･D16～D25 一般構造物</td>
+              <td></td><td class="num-val">2.5</td><td class="num-val">191,800</td><td class="num-val" style="color:#86efac">479,500</td>
+              <td><span class="tag tag-spec">SPEC</span><span class="tag tag-leaf">LEAF</span></td>
+            </tr>
+            <tr class="row-ellipsis">
+              <td class="row-num">…</td>
+              <td colspan="9">▼ 仮設設置(1) 追加H05項目 — 型枠・コンクリート・削孔 等 (計11行)</td>
+            </tr>
+            <tr class="row-ellipsis">
+              <td class="row-num">…</td>
+              <td colspan="9">▼ 撤去工 残りH03/H04/H05階層 (R15〜R627 · 計623行)</td>
+            </tr>
+            <tr style="background:#0d1117;border-top:1px solid #1e293b;">
+              <td class="row-num" colspan="2" style="color:#374151;font-size:10px">1,139行省略</td>
+              <td colspan="7" style="color:#374151;font-size:10px">… 立坑部 全H02・H03・H04・H05階層 (R5〜R627)</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 矢印 -->
+      <div class="arrow-col">
+        <div class="arrow-label">FLATTEN</div>
+        <svg class="arrow-svg" width="24" height="80" viewBox="0 0 24 80">
+          <line x1="12" y1="0" x2="12" y2="60" stroke="#4ade80" stroke-width="1.5"/>
+          <polyline points="6,54 12,68 18,54" fill="none" stroke="#4ade80" stroke-width="1.5"/>
+        </svg>
+        <svg class="arrow-svg" width="24" height="80" viewBox="0 0 24 80">
+          <line x1="12" y1="0" x2="12" y2="60" stroke="#4ade80" stroke-width="1.5"/>
+          <polyline points="6,54 12,68 18,54" fill="none" stroke="#4ade80" stroke-width="1.5"/>
+        </svg>
+        <svg class="arrow-svg" width="24" height="80" viewBox="0 0 24 80">
+          <line x1="12" y1="0" x2="12" y2="60" stroke="#4ade80" stroke-width="1.5"/>
+          <polyline points="6,54 12,68 18,54" fill="none" stroke="#4ade80" stroke-width="1.5"/>
+        </svg>
+      </div>
+
+      <!-- 右側: Flatten -->
+      <div>
+        <div class="col-label">Flatten LineItem (LEAF only)</div>
+        <table class="flat-table">
+          <thead>
+            <tr>
+              <th class="fc-h01">H01</th>
+              <th class="fc-h02">H02</th>
+              <th class="fc-h03">H03</th>
+              <th class="fc-h04">H04</th>
+              <th class="fc-leaf">Item_Name</th>
+              <th class="fc-unit">Unit</th>
+              <th class="fc-qty">Qty</th>
+              <th class="fc-amt">UnitPrice</th>
+              <th class="fc-amt">Amount</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="fc-h01">立坑部</td>
+              <td class="fc-h02">撤去工</td>
+              <td class="fc-h03" title="仮壁設置工">仮壁設置工</td>
+              <td class="fc-h04" title="仮設設置(1)">仮設設置(1)</td>
+              <td class="fc-leaf" title="鉄筋(1)">鉄筋(1)</td>
+              <td class="fc-unit">ｔ</td>
+              <td class="fc-qty">1.6</td>
+              <td class="fc-amt">193,900</td>
+              <td class="fc-amt" style="color:#86efac">310,240</td>
+              <td><span class="tag tag-leaf">LEAF</span></td>
+            </tr>
+            <tr>
+              <td class="fc-h01">立坑部</td>
+              <td class="fc-h02">撤去工</td>
+              <td class="fc-h03" title="仮壁設置工">仮壁設置工</td>
+              <td class="fc-h04" title="仮設設置(1)">仮設設置(1)</td>
+              <td class="fc-leaf" title="鉄筋(2)">鉄筋(2)</td>
+              <td class="fc-unit">ｔ</td>
+              <td class="fc-qty">2.5</td>
+              <td class="fc-amt">191,800</td>
+              <td class="fc-amt" style="color:#86efac">479,500</td>
+              <td><span class="tag tag-leaf">LEAF</span></td>
+            </tr>
+            <tr>
+              <td class="fc-h01">立坑部</td>
+              <td class="fc-h02">撤去工</td>
+              <td class="fc-h03" title="仮壁設置工">仮壁設置工</td>
+              <td class="fc-h04" title="仮設設置(1)">仮設設置(1)</td>
+              <td class="fc-leaf" title="型枠">型枠</td>
+              <td class="fc-unit">m2</td>
+              <td class="fc-qty">120</td>
+              <td class="fc-amt">10,510</td>
+              <td class="fc-amt" style="color:#86efac">1,261,200</td>
+              <td><span class="tag tag-leaf">LEAF</span></td>
+            </tr>
+            <tr>
+              <td class="fc-h01">立坑部</td>
+              <td class="fc-h02">撤去工</td>
+              <td class="fc-h03" title="仮壁設置工">仮壁設置工</td>
+              <td class="fc-h04" title="仮設設置(1)">仮設設置(1)</td>
+              <td class="fc-leaf" title="コンクリート">コンクリート</td>
+              <td class="fc-unit">m3</td>
+              <td class="fc-qty">29</td>
+              <td class="fc-amt">31,910</td>
+              <td class="fc-amt" style="color:#86efac">925,390</td>
+              <td><span class="tag tag-leaf">LEAF</span></td>
+            </tr>
+            <tr>
+              <td class="fc-h01">運搬費</td>
+              <td class="fc-h02" title="運搬費【ケコム工法】">運搬費【ケコム】</td>
+              <td class="fc-h03" title="重建設機械分解組立輸送(1)">重建設機械…(1)</td>
+              <td class="fc-h04" style="color:#475569">—</td>
+              <td class="fc-leaf" title="重建設機械分解組立輸送(1)">重建設機械…(1)</td>
+              <td class="fc-unit">回</td>
+              <td class="fc-qty">1</td>
+              <td class="fc-amt">2,497,000</td>
+              <td class="fc-amt" style="color:#86efac">2,497,000</td>
+              <td><span class="tag tag-leaf">LEAF</span></td>
+            </tr>
+            <tr style="background:#0d1117;border-top:1px solid #1e293b;">
+              <td colspan="10" style="color:#374151;font-size:10px;padding:6px">… 計 1,169 LEAF行 · 合計 ¥11,597,202,077 (差異 0円) ✓</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="margin-top:12px;padding:10px 12px;background:#0d1f17;border:1px solid #065f46;border-radius:6px;font-size:10px;color:#4ade80">
+          ✓ BRANCH(H02〜H04集計行、price=None)除去 · ✓ PAGE_COUNTER/COL_HEADER/EMPTY除去 · ✓ H01〜H05パス完全正規化
+        </div>
+      </div>
+    </div><!-- /diagram-body -->
+
+    <div class="bottom-boxes">
+      <div class="box-flatten">
+        <div class="box-title green">▶ FLATTENが解決すること</div>
+        <div class="box-item">HDR行(品目名+単位) + SPEC行(規格+数量+単価) 2行構造を1行にマージ</div>
+        <div class="box-item">A/B/C/D列位置による階層 → H01〜H05パスカラムに正規化</div>
+        <div class="box-item">H02〜H04集計SPEC行(price=None)除去 — LEAFのみ抽出</div>
+        <div class="box-item">PAGE_COUNTER・COL_HEADER・ZONE_MARKER・EMPTY(489行)除去 — 4,620行 → 1,169行</div>
+        <div class="box-item">12個のH01 Zone境界を正確に検出 → 全LEAFにH01パス付与</div>
+      </div>
+      <div class="box-note">
+        <div class="box-title blue">▶ 本内訳書の特異構造</div>
+        <div class="box-item blue">8〜13号セクションはゾーンでなく費用分類(共通仮設費・調査費) — 同一検出ロジック適用可</div>
+        <div class="box-item blue">その他(11号)内の地質調査・六価クロムがH01レベルでA列出現 → H01_ZONESホワイトリスト13個必須</div>
+        <div class="box-item blue">H02/H03_HDR + SPEC 直結LEAF (運搬費セクション51件、事業損失防止施設費6件等) — 非標準構造</div>
+        <div class="box-item blue">Flatten合計(11.6B) vs 工事価格(17.5B) 差異5.9B: 共通仮設費率計上・現場管理費・一般管理費 別途計上 (JP標準)</div>
+      </div>
+    </div>
+  </div><!-- /diagram-wrap -->
+</div>
+
+<!-- ── §6 BOQエラー検出結果 ── -->
+<div class="section">
+  <div class="section-title">§6 · BOQエラー検出結果</div>
+  <div style="background:#0d1f17;border:1px solid #065f46;border-radius:6px;padding:16px;display:inline-block">
+    <div style="color:#4ade80;font-size:13px;font-weight:700;margin-bottom:8px">検出完了 / 数値エラーなし</div>
+    <div class="kv"><span class="kv-key">CRITICAL</span><span class="kv-val ok">0件</span></div>
+    <div class="kv"><span class="kv-key">WARNING</span><span class="kv-val ok">0件</span></div>
+    <div class="kv"><span class="kv-key">INFO</span><span class="kv-val" style="color:#fbbf24">1件</span></div>
+    <div style="margin-top:10px;font-size:11px;color:#64748b">
+      [INFO] Flatten合計(¥11.6B) vs 工事価格(¥17.5B) 差異¥5.9B — JP BOQ標準構造 (FOOTER_STANDARD).<br>
+      供給価額(号内訳書合計)以外の間接費は総括表にて率計上。エラーではない。
+    </div>
+  </div>
+  <div style="margin-top:12px;font-size:11px;color:#475569">
+    前引値チェック: 新技術使用料セクション(■/▣ブロック)未検出 — 該当なし。
+  </div>
+</div>
+
+</body>
+</html>
